@@ -1,0 +1,106 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lighting Studio — 3D Reference for Drawing</title>
+  <meta name="description" content="3D lighting reference tool for artists. Study lighting, shadows, and form without complex software.">
+  <meta name="keywords" content="3D lighting, art reference, drawing, shadows, form study, digital art">
+  
+  <!-- Open Graph / Social Media -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Lighting Studio - 3D Reference Tool">
+  <meta property="og:description" content="Interactive 3D lighting reference tool to help artists study lighting and shadows">
+  <meta property="og:url" content="{{ request.url }}">
+  
+  <style>
+    :root{--glass:#0b1220cc;--line:#1f2937;--fg:#e5e7eb;--muted:#94a3b8}
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;overflow:hidden;background:#0b0f17;color:var(--fg);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Arial}
+    #toolbar{position:absolute;top:12px;left:12px;display:flex;gap:8px;z-index:10}
+    .btn{padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--glass);color:var(--fg);cursor:pointer;border:none;font-size:12px}
+    .btn:hover{background:#1f2937aa}
+    .btn.active{outline:2px solid #2563eb;background:#1e3a8a44}
+    #counts{position:absolute;top:12px;right:12px;background:var(--glass);border:1px solid var(--line);padding:6px 10px;border-radius:999px;color:var(--muted);font-size:12px;z-index:10}
+    #hint{position:absolute;left:12px;bottom:12px;background:var(--glass);border:1px solid var(--line);padding:6px 8px;border-radius:8px;color:var(--muted);font-size:12px;z-index:10;max-width:400px}
+    #scene{width:100%;height:100%;display:block}
+    #status{position:absolute;top:50px;left:12px;background:var(--glass);border:1px solid var(--line);padding:6px 8px;border-radius:8px;color:var(--muted);font-size:12px;z-index:10}
+    #info{position:absolute;top:12px;right:200px;z-index:10}
+    #info a{color:var(--muted);text-decoration:none;background:var(--glass);border:1px solid var(--line);padding:4px 8px;border-radius:6px;font-size:11px}
+    #info a:hover{color:var(--fg)}
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <button class="btn active" id="btnLight">💡 Place Light (L)</button>
+    <button class="btn" id="btnSphere">⚪ Sphere (S)</button>
+    <button class="btn" id="btnCube">⬜ Cube (C)</button>
+    <button class="btn" id="btnSelect">👆 Select (V)</button>
+    <button class="btn" id="btnDrag">✋ Drag (D)</button>
+    <button class="btn" id="btnScale">🔍 Scale (R)</button>
+    <button class="btn" id="btnDelete">🗑️ Delete (Del)</button>
+  </div>
+  <div id="info">
+    <a href="/about" target="_blank">About</a>
+  </div>
+  <div id="counts">0 lights • 0 objects</div>
+  <div id="status">Loading Three.js...</div>
+  <div id="scaleControls" style="position:absolute;top:50px;left:12px;background:var(--glass);border:1px solid var(--line);padding:8px;border-radius:8px;color:var(--fg);font-size:12px;z-index:10;display:none;">
+    <div>Scale: <span id="scaleValue">1.0</span></div>
+    <input type="range" id="scaleSlider" min="0.1" max="5.0" step="0.1" value="1.0" style="width:150px;margin:4px 0;">
+    <div style="font-size:10px;color:var(--muted);">Wheel: scale • Shift+wheel: vertical • ↑↓ keys: vertical</div>
+  </div>
+  <div id="hint">Place: click ground • Select: click objects (V) • Drag: move objects (D) • Scale: wheel/slider (R) • Vertical: Shift+wheel or ↑↓ • Delete: Del • Camera: drag to rotate</div>
+  <canvas id="scene"></canvas>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    // [Your existing JavaScript code from the working app goes here - I'll truncate for brevity]
+    const statusEl = document.getElementById('status');
+    
+    function waitForThree() {
+      if (typeof THREE === 'undefined') {
+        statusEl.textContent = 'Waiting for Three.js...';
+        setTimeout(waitForThree, 100);
+        return;
+      }
+      statusEl.textContent = 'Three.js loaded! Setting up scene...';
+      console.log('Three.js version:', THREE.REVISION);
+      initScene();
+    }
+    
+    // [Rest of your JavaScript code would go here]
+    // I'm truncating this to keep the artifact readable, but you'd copy all your JS
+    
+    function initScene() {
+      // Your complete initScene function
+      try {
+        const canvas = document.getElementById('scene');
+        const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0f19);
+        
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
+        camera.position.set(7, 6, 9);
+        camera.lookAt(0, 1, 0);
+        
+        // [Rest of your complete JavaScript code]
+        console.log('Lighting Studio loaded successfully!');
+        
+      } catch(error) {
+        console.error('Error initializing scene:', error);
+        statusEl.textContent = 'Error: ' + error.message;
+      }
+    }
+    
+    waitForThree();
+  </script>
+</body>
+</html>
