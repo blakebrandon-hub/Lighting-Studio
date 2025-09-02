@@ -93,6 +93,9 @@
         
         // [Rest of your complete JavaScript code]
         console.log('Lighting Studio loaded successfully!');
+        // Add this as a test
+        console.log('Scene children count:', scene.children.length);
+        console.log('Ground added:', scene.getObjectByName('ground') !== undefined);
         
       } catch(error) {
         console.error('Error initializing scene:', error);
@@ -104,3 +107,4 @@
   </script>
 </body>
 </html>
+
