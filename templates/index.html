@@ -1,19 +1,9 @@
-<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Lighting Studio — 3D Reference for Drawing</title>
-  <meta name="description" content="3D lighting reference tool for artists. Study lighting, shadows, and form without complex software.">
-  <meta name="keywords" content="3D lighting, art reference, drawing, shadows, form study, digital art">
-  
-  <!-- Open Graph / Social Media -->
-  <meta property="og:type" content="website">
-  <meta property="og:title" content="Lighting Studio - 3D Reference Tool">
-  <meta property="og:description" content="Interactive 3D lighting reference tool to help artists study lighting and shadows">
-  <meta property="og:url" content="{{ request.url }}">
-  
   <style>
     :root{--glass:#0b1220cc;--line:#1f2937;--fg:#e5e7eb;--muted:#94a3b8}
     *{box-sizing:border-box}
@@ -27,9 +17,6 @@
     #hint{position:absolute;left:12px;bottom:12px;background:var(--glass);border:1px solid var(--line);padding:6px 8px;border-radius:8px;color:var(--muted);font-size:12px;z-index:10;max-width:400px}
     #scene{width:100%;height:100%;display:block}
     #status{position:absolute;top:50px;left:12px;background:var(--glass);border:1px solid var(--line);padding:6px 8px;border-radius:8px;color:var(--muted);font-size:12px;z-index:10}
-    #info{position:absolute;top:12px;right:200px;z-index:10}
-    #info a{color:var(--muted);text-decoration:none;background:var(--glass);border:1px solid var(--line);padding:4px 8px;border-radius:6px;font-size:11px}
-    #info a:hover{color:var(--fg)}
   </style>
 </head>
 <body>
@@ -41,9 +28,6 @@
     <button class="btn" id="btnDrag">✋ Drag (D)</button>
     <button class="btn" id="btnScale">🔍 Scale (R)</button>
     <button class="btn" id="btnDelete">🗑️ Delete (Del)</button>
-  </div>
-  <div id="info">
-    <a href="/about" target="_blank">About</a>
   </div>
   <div id="counts">0 lights • 0 objects</div>
   <div id="status">Loading Three.js...</div>
@@ -57,26 +41,24 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
-    // [Your existing JavaScript code from the working app goes here - I'll truncate for brevity]
     const statusEl = document.getElementById('status');
     
+    // Wait for Three.js to load
     function waitForThree() {
       if (typeof THREE === 'undefined') {
         statusEl.textContent = 'Waiting for Three.js...';
         setTimeout(waitForThree, 100);
         return;
       }
+      
       statusEl.textContent = 'Three.js loaded! Setting up scene...';
       console.log('Three.js version:', THREE.REVISION);
       initScene();
     }
     
-    // [Rest of your JavaScript code would go here]
-    // I'm truncating this to keep the artifact readable, but you'd copy all your JS
-    
     function initScene() {
-      // Your complete initScene function
       try {
+        // ---------- Basic setup ----------
         const canvas = document.getElementById('scene');
         const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -91,11 +73,551 @@
         camera.position.set(7, 6, 9);
         camera.lookAt(0, 1, 0);
         
-        // [Rest of your complete JavaScript code]
-        console.log('Lighting Studio loaded successfully!');
-        // Add this as a test
-        console.log('Scene children count:', scene.children.length);
-        console.log('Ground added:', scene.getObjectByName('ground') !== undefined);
+        // Ground
+        const ground = new THREE.Mesh(
+          new THREE.PlaneGeometry(40, 40),
+          new THREE.MeshStandardMaterial({color: 0x101826, roughness: 1})
+        );
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+        
+        // Grid
+        const gridHelper = new THREE.GridHelper(40, 40, 0x2a3b55, 0x162033);
+        gridHelper.position.y = 0.001;
+        scene.add(gridHelper);
+        
+        // Ambient light
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
+        scene.add(ambientLight);
+        
+        statusEl.textContent = 'Scene ready! Click to place objects.';
+        setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
+        
+        // ---------- Simple Camera Controls (no external dependencies) ----------
+        let isRotating = false;
+        let isPanning = false;
+        let lastMouse = {x: 0, y: 0};
+        
+        function updateCamera() {
+          camera.lookAt(0, 1, 0);
+        }
+        
+        let mouseStartPos = {x: 0, y: 0};
+        let hasMoved = false;
+        
+        canvas.addEventListener('mousedown', (e) => {
+          mouseStartPos.x = e.clientX;
+          mouseStartPos.y = e.clientY;
+          lastMouse.x = e.clientX;
+          lastMouse.y = e.clientY;
+          hasMoved = false;
+          
+          if (e.button === 0) {
+            if (mode === 'select') {
+              // Only select, no dragging
+              trySelect(e);
+              isRotating = true; // Can still rotate camera in select mode
+            } else if (mode === 'drag') {
+              // Try to start dragging if object is selected
+              if (selected) {
+                const worldPos = getWorldPosition(e);
+                const targetPos = selected.light ? selected.light.position : selected.position;
+                dragOffset.copy(targetPos).sub(worldPos);
+                isDragging = true;
+                console.log('Started dragging:', selected);
+              } else {
+                // If nothing selected, try to select first
+                const didSelect = trySelect(e);
+                if (!didSelect) {
+                  isRotating = true; // Rotate camera if nothing to select
+                }
+              }
+            } else if (mode === 'scale') {
+              // In scale mode, select objects but don't drag
+              trySelect(e);
+              isRotating = true;
+            } else {
+              isRotating = true; // Always rotate in placement modes
+            }
+          } else if (e.button === 2) {
+            isPanning = true;
+          }
+          
+          e.preventDefault();
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+          const deltaX = e.clientX - lastMouse.x;
+          const deltaY = e.clientY - lastMouse.y;
+          
+          // Check if mouse has moved significantly
+          const totalDelta = Math.abs(e.clientX - mouseStartPos.x) + Math.abs(e.clientY - mouseStartPos.y);
+          if (totalDelta > 5) hasMoved = true;
+          
+          if (isDragging && selected) {
+            handleDrag(e);
+          } else if (isRotating) {
+            // Orbit around center
+            const spherical = new THREE.Spherical();
+            spherical.setFromVector3(camera.position);
+            spherical.theta -= deltaX * 0.01;
+            spherical.phi += deltaY * 0.01;
+            spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+            camera.position.setFromSpherical(spherical);
+            updateCamera();
+          }
+          
+          lastMouse.x = e.clientX;
+          lastMouse.y = e.clientY;
+        });
+        
+        canvas.addEventListener('mouseup', (e) => {
+          if (e.button === 0) {
+            if (isDragging) {
+              console.log('Finished dragging');
+              isDragging = false;
+            } else if (!hasMoved) {
+              // Only place/select if mouse didn't move (was a click, not a drag)
+              if (mode === 'select') {
+                // Selection already handled in mousedown
+              } else if (mode === 'drag') {
+                // Try to select object for future dragging
+                trySelect(e);
+              } else if (mode === 'scale') {
+                // Selection already handled in mousedown
+              } else {
+                handlePlacement(e); // Place object in placement modes
+              }
+            }
+            isRotating = false;
+          }
+          
+          isPanning = false;
+        });
+        
+        canvas.addEventListener('wheel', (e) => {
+          if (selected && (mode === 'drag' || mode === 'scale')) {
+            if (e.shiftKey) {
+              // Shift + wheel = vertical movement
+              e.preventDefault();
+              const direction = e.deltaY > 0 ? -0.2 : 0.2;
+              moveObjectVertically(selected, direction);
+            } else {
+              // Regular wheel = scaling (only in drag or scale modes)
+              e.preventDefault();
+              const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
+              scaleObject(selected, scaleFactor);
+            }
+          } else {
+            // Zoom camera
+            const zoomSpeed = 0.1;
+            const direction = e.deltaY > 0 ? 1 : -1;
+            camera.position.multiplyScalar(1 + direction * zoomSpeed);
+            updateCamera();
+            e.preventDefault();
+          }
+        });
+        
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+        
+        // ---------- State & Objects ----------
+        const lights = [];
+        const objects = []; // Start with empty objects array
+        let selected = null;
+        let mode = 'placeLight';
+        let isDragging = false;
+        let isScaling = false;
+        const dragOffset = new THREE.Vector3();
+        
+        function updateCounts() {
+          document.getElementById('counts').textContent = 
+            `${lights.length} light${lights.length === 1 ? '' : 's'} • ${objects.length} object${objects.length === 1 ? '' : 's'}`;
+        }
+        updateCounts();
+        
+        // ---------- Raycasting ----------
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        
+        function getWorldPosition(event) {
+          const rect = canvas.getBoundingClientRect();
+          mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+          mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+          
+          raycaster.setFromCamera(mouse, camera);
+          
+          // Intersect with ground plane
+          const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+          const intersection = new THREE.Vector3();
+          raycaster.ray.intersectPlane(groundPlane, intersection);
+          
+          return intersection;
+        }
+        
+        // ---------- Object Creation ----------
+        function placeLightAt(position) {
+          console.log('Placing light at:', position);
+          
+          const light = new THREE.PointLight(0xffffff, 1.5, 15);
+          light.position.set(position.x, position.y + 3, position.z);
+          light.castShadow = true;
+          scene.add(light);
+          
+          const helper = new THREE.Mesh(
+            new THREE.SphereGeometry(0.15, 12, 8),
+            new THREE.MeshBasicMaterial({color: 0xffffff})
+          );
+          helper.position.copy(light.position);
+          scene.add(helper);
+          
+          const lightData = {light, helper};
+          lights.push(lightData);
+          updateCounts();
+          
+          console.log('Light placed successfully');
+        }
+        
+        function placeObjectAt(kind, position) {
+          console.log('Placing', kind, 'at:', position);
+          
+          let geometry;
+          if (kind === 'sphere') {
+            geometry = new THREE.SphereGeometry(1, 32, 24);
+          } else if (kind === 'cube') {
+            geometry = new THREE.BoxGeometry(2, 2, 2);
+          }
+          
+          const material = new THREE.MeshStandardMaterial({
+            color: 0xdddddd,
+            roughness: 0.5
+          });
+          
+          const mesh = new THREE.Mesh(geometry, material);
+          // Position objects properly above ground based on their size
+          mesh.position.set(position.x, kind === 'cube' ? 1 : 1, position.z);
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          scene.add(mesh);
+          
+          objects.push(mesh);
+          updateCounts();
+          
+          console.log(kind, 'placed successfully');
+        }
+        
+        // ---------- Scaling Functions ----------
+        function scaleObject(obj, scaleFactor) {
+          if (!obj) return;
+          
+          let targetObject = obj.light ? obj.helper : obj;
+          
+          if (targetObject) {
+            const currentScale = targetObject.scale.x;
+            const newScale = Math.max(0.1, Math.min(5.0, currentScale * scaleFactor));
+            
+            if (obj.light) {
+              // Scale light helper and adjust light intensity
+              obj.helper.scale.setScalar(newScale);
+              obj.light.intensity = 1.5 * newScale; // Adjust intensity with size
+              obj.light.distance = 15 * newScale; // Adjust distance with size
+            } else {
+              // Scale regular object and adjust Y position to keep it above ground
+              const oldScale = targetObject.scale.x;
+              targetObject.scale.setScalar(newScale);
+              
+              // Adjust Y position based on object type and scale
+              if (targetObject.geometry.type === 'BoxGeometry') {
+                // Cubes: bottom should touch ground (height/2 = scale)
+                targetObject.position.y = newScale;
+              } else if (targetObject.geometry.type === 'SphereGeometry') {
+                // Spheres: bottom should touch ground (radius = scale)
+                targetObject.position.y = newScale;
+              }
+            }
+            
+            updateScaleSlider();
+            console.log('Scaled object to:', newScale);
+          }
+        }
+        
+        function setObjectScale(obj, scale) {
+          if (!obj) return;
+          
+          scale = Math.max(0.1, Math.min(5.0, scale));
+          let targetObject = obj.light ? obj.helper : obj;
+          
+          if (targetObject) {
+            if (obj.light) {
+              obj.helper.scale.setScalar(scale);
+              obj.light.intensity = 1.5 * scale;
+              obj.light.distance = 15 * scale;
+            } else {
+              targetObject.scale.setScalar(scale);
+              
+              // Adjust Y position to keep object above ground
+              if (targetObject.geometry.type === 'BoxGeometry') {
+                targetObject.position.y = scale;
+              } else if (targetObject.geometry.type === 'SphereGeometry') {
+                targetObject.position.y = scale;
+              }
+            }
+            console.log('Set object scale to:', scale);
+          }
+        }
+        
+        function moveObjectVertically(obj, deltaY) {
+          if (!obj) return;
+          
+          if (obj.light) {
+            // Move light
+            const newY = Math.max(0.5, obj.light.position.y + deltaY);
+            obj.light.position.y = newY;
+            obj.helper.position.copy(obj.light.position);
+          } else {
+            // Move regular object - minimum Y should be its scale (radius/half-height)
+            const minY = obj.scale.x;
+            const newY = Math.max(minY, obj.position.y + deltaY);
+            obj.position.y = newY;
+          }
+          
+          console.log('Moved object vertically to Y:', obj.light ? obj.light.position.y : obj.position.y);
+        }
+        
+        function updateScaleSlider() {
+          const scaleControls = document.getElementById('scaleControls');
+          const scaleSlider = document.getElementById('scaleSlider');
+          const scaleValue = document.getElementById('scaleValue');
+          
+          if (selected && (mode === 'drag' || mode === 'scale')) {
+            scaleControls.style.display = 'block';
+            let targetObject = selected.light ? selected.helper : selected;
+            const currentScale = targetObject ? targetObject.scale.x : 1.0;
+            scaleSlider.value = currentScale;
+            scaleValue.textContent = currentScale.toFixed(1);
+          } else {
+            scaleControls.style.display = 'none';
+          }
+        }
+
+        // ---------- Selection & Deletion ----------
+        function trySelect(event) {
+          const rect = canvas.getBoundingClientRect();
+          mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+          mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+          
+          raycaster.setFromCamera(mouse, camera);
+          const candidates = [...objects, ...lights.map(l => l.helper)];
+          const intersections = raycaster.intersectObjects(candidates, false);
+          
+          if (intersections.length > 0) {
+            const hitObject = intersections[0].object;
+            const lightData = lights.find(l => l.helper === hitObject);
+            
+            clearSelection();
+            selected = lightData || hitObject;
+            highlightSelected();
+            updateScaleSlider(); // Update scale controls
+            console.log('Selected:', selected);
+            return true;
+          }
+          return false;
+        }
+        
+        function clearSelection() {
+          if (selected) {
+            if (selected.light) {
+              selected.helper.material.emissive.setHex(0x000000);
+            } else if (selected.material) {
+              selected.material.emissive.setHex(0x000000);
+            }
+          }
+          selected = null;
+          updateScaleSlider(); // Hide scale controls
+        }
+        
+        function highlightSelected() {
+          if (selected) {
+            if (selected.light) {
+              selected.helper.material.emissive.setHex(0x444444);
+            } else if (selected.material) {
+              selected.material.emissive.setHex(0x333333);
+            }
+          }
+        }
+        
+        function deleteSelected() {
+          console.log('deleteSelected called, selected object:', selected);
+          
+          if (!selected) {
+            console.log('Nothing selected to delete');
+            return;
+          }
+          
+          try {
+            if (selected.light) {
+              // It's a light object
+              console.log('Deleting light:', selected.light);
+              scene.remove(selected.light);
+              scene.remove(selected.helper);
+              
+              const index = lights.indexOf(selected);
+              console.log('Light index in array:', index);
+              if (index > -1) {
+                lights.splice(index, 1);
+                console.log('Light removed from array, remaining lights:', lights.length);
+              }
+            } else {
+              // It's a regular object
+              console.log('Deleting object:', selected);
+              scene.remove(selected);
+              
+              const index = objects.indexOf(selected);
+              console.log('Object index in array:', index);
+              if (index > -1) {
+                objects.splice(index, 1);
+                console.log('Object removed from array, remaining objects:', objects.length);
+              }
+            }
+            
+            // Clear selection and update counts
+            clearSelection();
+            updateCounts();
+            console.log('Delete completed successfully');
+            
+          } catch (error) {
+            console.error('Error during deletion:', error);
+          }
+        }
+
+        // ---------- Event Handlers ----------
+        function handlePlacement(event) {
+          if (mode === 'select') {
+            // Selection is handled in mousedown/mouseup
+            return;
+          }
+          
+          const worldPos = getWorldPosition(event);
+          console.log('Placing in mode:', mode, 'at:', worldPos);
+          
+          if (mode === 'placeLight') {
+            placeLightAt(worldPos);
+          } else if (mode === 'placeSphere') {
+            placeObjectAt('sphere', worldPos);
+          } else if (mode === 'placeCube') {
+            placeObjectAt('cube', worldPos);
+          }
+        }
+        
+        function handleDrag(event) {
+          if (!selected || !isDragging) return;
+          
+          const worldPos = getWorldPosition(event);
+          worldPos.add(dragOffset);
+          
+          if (selected.light) {
+            selected.light.position.set(worldPos.x, Math.max(0.5, worldPos.y), worldPos.z);
+            selected.helper.position.copy(selected.light.position);
+          } else {
+            // Keep objects properly positioned above ground based on their scale
+            const minY = selected.scale.x; // Use scale as minimum height
+            const y = Math.max(minY, worldPos.y);
+            selected.position.set(worldPos.x, y, worldPos.z);
+          }
+          
+          console.log('Dragging to:', worldPos);
+        }
+        
+        // ---------- UI Controls ----------
+        function setMode(newMode) {
+          mode = newMode;
+          document.querySelectorAll('#toolbar .btn').forEach(b => b.classList.remove('active'));
+          
+          if (newMode === 'placeLight') btnLight.classList.add('active');
+          else if (newMode === 'placeSphere') btnSphere.classList.add('active');
+          else if (newMode === 'placeCube') btnCube.classList.add('active');
+          else if (newMode === 'select') btnSelect.classList.add('active');
+          else if (newMode === 'drag') btnDrag.classList.add('active');
+          else if (newMode === 'scale') btnScale.classList.add('active');
+          
+          updateScaleSlider(); // Update scale controls visibility
+          console.log('Mode changed to:', newMode);
+        }
+        
+        const btnLight = document.getElementById('btnLight');
+        const btnSphere = document.getElementById('btnSphere');
+        const btnCube = document.getElementById('btnCube');
+        const btnSelect = document.getElementById('btnSelect');
+        const btnDrag = document.getElementById('btnDrag');
+        const btnScale = document.getElementById('btnScale');
+        const btnDelete = document.getElementById('btnDelete');
+        const scaleSlider = document.getElementById('scaleSlider');
+        
+        btnLight.onclick = () => setMode('placeLight');
+        btnSphere.onclick = () => setMode('placeSphere');
+        btnCube.onclick = () => setMode('placeCube');
+        btnSelect.onclick = () => setMode('select');
+        btnDrag.onclick = () => setMode('drag');
+        btnScale.onclick = () => setMode('scale');
+        btnDelete.onclick = (e) => {
+          e.preventDefault();
+          console.log('Delete button clicked, selected:', selected);
+          deleteSelected();
+        };
+        
+        // Scale slider control
+        scaleSlider.addEventListener('input', (e) => {
+          if (selected) {
+            const scale = parseFloat(e.target.value);
+            setObjectScale(selected, scale);
+            document.getElementById('scaleValue').textContent = scale.toFixed(1);
+          }
+        });
+        
+        window.addEventListener('keydown', (e) => {
+          console.log('Key pressed:', e.key);
+          const key = e.key.toLowerCase();
+          if (key === 'l') setMode('placeLight');
+          else if (key === 's') setMode('placeSphere');
+          else if (key === 'c') setMode('placeCube');
+          else if (key === 'v') setMode('select');
+          else if (key === 'd') setMode('drag');
+          else if (key === 'r') setMode('scale');
+          else if (key === 'delete' || key === 'backspace') {
+            console.log('Delete key pressed, selected:', selected);
+            deleteSelected();
+            e.preventDefault();
+          }
+          else if (key === 'escape') {
+            clearSelection();
+            e.preventDefault();
+          }
+          else if (selected && (key === '+' || key === '=')) {
+            scaleObject(selected, 1.1);
+            e.preventDefault();
+          }
+          else if (selected && (key === '-' || key === '_')) {
+            scaleObject(selected, 0.9);
+            e.preventDefault();
+          }
+          else if (selected && (key === 'arrowup' || key === 'w')) {
+            moveObjectVertically(selected, 0.2);
+            e.preventDefault();
+          }
+          else if (selected && (key === 'arrowdown' || key === 's')) {
+            moveObjectVertically(selected, -0.2);
+            e.preventDefault();
+          }
+        });
+        
+        // ---------- Render Loop ----------
+        function animate() {
+          renderer.render(scene, camera);
+          requestAnimationFrame(animate);
+        }
+        animate();
+        
+        console.log('Everything initialized! Try clicking on the ground.');
         
       } catch(error) {
         console.error('Error initializing scene:', error);
@@ -103,8 +625,8 @@
       }
     }
     
+    // Start loading
     waitForThree();
   </script>
 </body>
 </html>
-
