@@ -36,7 +36,3 @@ Interactive 3D lighting reference tool for artists.
 ## License
 
 MIT License - feel free to use, modify, and share!
-
----
-
-*Made with ❤️ for the art community*
