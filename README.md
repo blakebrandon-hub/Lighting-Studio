@@ -1,6 +1,6 @@
 # 🎨 Lighting Studio
 
-Interactive 3D lighting reference tool for artists. Study lighting, shadows, and form without needing complex 3D software!
+Interactive 3D lighting reference tool for artists.
 
 ## Features
 
